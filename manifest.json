@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "fanbox-downloader",
   "description": "PIXIV FANBOXの作品ページから右クリック保存",
-  "version": "1.3.16",
+  "version": "1.4.0",
   "author": "tana3n",
   "icons": {
     "48": "icon_48.png",
@@ -16,7 +16,7 @@
     }
   ],
   "background": {
-    "scripts": ["event_page.js"]
+    "scripts": ["jszip.min.js", "event_page.js"]
   },
   "permissions": [
     "downloads",
@@ -29,5 +29,10 @@
   "options_ui": {
     "page": "settings.html"
   },
-  "homepage_url": "https://github.com/tana3n/fanbox-downloader/"
+  "homepage_url": "https://github.com/tana3n/fanbox-downloader/",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "fanbox-downloader-zip@local.addon"
+    }
+  }
 }

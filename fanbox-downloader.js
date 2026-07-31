@@ -80,10 +80,14 @@ function getText() {
   }
   return text;
 }
-function dlText() {
+function dlText(collect) {
   if (getText() != "") {
-    const blob2 = new Blob([getText()], { type: "text/plain" });
     const filename = getFilename(-1) + ".txt";
+    if (collect) {
+      collect.push({ text: getText(), filename: filename });
+      return;
+    }
+    const blob2 = new Blob([getText()], { type: "text/plain" });
     if (isChrominum() == true) {
       console.log("SetFlag: Chrominum");
       const blob3 = URL.createObjectURL(blob2);
@@ -100,7 +104,7 @@ function dlText() {
   }
 }
 
-async function dlAttr() {
+async function dlAttr(collect) {
   Attr = document.querySelectorAll("[download]");
   if (Attr != null) {
     for (var num = 0; num < Attr.length; num++) {
@@ -108,6 +112,10 @@ async function dlAttr() {
       t = Attr[num].getAttribute("download");
       query = getFilename(-2) + "." + getExttype(s2);
       filename = query.replaceAll("$AttrName$", t);
+      if (collect) {
+        collect.push({ url: s2, filename: filename });
+        continue;
+      }
       getFile("download", s2, filename);
       await new Promise((s) => {
         setTimeout(s, 150);
@@ -116,18 +124,35 @@ async function dlAttr() {
   }
 }
 
-async function dlimg() {
+async function dlimg(collect) {
   diff = getDiff();
   for (var num = 0; num < diff; num++) {
     const url = getSrcURL(num);
     console.log(url);
     const filename = getFilename(num) + "." + getExttype(url);
     console.log(filename);
+    if (collect) {
+      collect.push({ url: url, filename: filename });
+      continue;
+    }
     await new Promise((s) => {
       getFile("download", url, filename);
       setTimeout(s, 150);
     });
   }
+}
+
+async function dlZip(str) {
+  const items = [];
+  await dlimg(items);
+  if (str.savetext == true) {
+    dlText(items);
+  }
+  if (str.saveattr == true) {
+    await dlAttr(items);
+  }
+  const zipname = getFilename(-1) + ".zip";
+  chrome.runtime.sendMessage({ type: "zip", items: items, zipname: zipname });
 }
 
 function getDate(query, custom) {
@@ -283,6 +308,12 @@ async function main(str) {
   globalThis.macro2 = str.macro2;
   globalThis.macro3 = str.macro3;
 
+  if (str.zipdownload == true) {
+    console.log("Enabled ZipDownload");
+    dlZip(str);
+    return;
+  }
+
   dlimg();
 
   if (str.savetext == true) {
@@ -297,7 +328,7 @@ async function main(str) {
 
 chrome.runtime.onMessage.addListener(function (request, sender) {
   chrome.storage.local.get(
-    ["savetext", "saveattr", "macro", "macro2", "macro3"],
+    ["savetext", "saveattr", "macro", "macro2", "macro3", "zipdownload"],
     function (str) {
       if (str.macro == undefined) {
         alert("fanbox-downloader：オプションから設定を行ってください");
