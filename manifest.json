@@ -25,7 +25,7 @@
   "homepage_url": "https://github.com/nameanonymous/fanbox-downloader-zip/",
   "browser_specific_settings": {
     "gecko": {
-      "id": "{a9413bbd-5b20-4c19-97e4-8eb949861725}",
+      "id": "{c15ebaf3-5c58-434c-aca9-f7d76d86f48e}",
       "data_collection_permissions": {
         "required": ["none"]
       }
