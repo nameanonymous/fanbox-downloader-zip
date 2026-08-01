@@ -1,5 +1,5 @@
 // Some files can't be linked directly, so route them through the extension first
-chrome.runtime.onMessage.addListener(function (request) {
+chrome.runtime.onMessage.addListener(function (request, sender) {
   if (request.type == "download") {
     console.log(request.filename);
     download(request.url, request.filename);
@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener(function (request) {
     const blob = URL.createObjectURL(request.blob);
     download(blob, request.filename);
   } else if (request.type == "zip") {
-    downloadZip(request.items, request.zipname);
+    downloadZip(request.items, request.zipname, sender.tab && sender.tab.id);
   }
   return true;
 });
@@ -25,7 +25,14 @@ function basename(path) {
   return path.split("/").pop();
 }
 
-async function downloadZip(items, zipname) {
+function reportZipProgress(tabId, done, total) {
+  if (tabId == undefined) return;
+  chrome.tabs.sendMessage(tabId, { type: "zipProgress", done, total }, function () {
+    void chrome.runtime.lastError; // no listener on the other end — ignore
+  });
+}
+
+async function downloadZip(items, zipname, tabId) {
   const zip = new JSZip();
   const usedNames = new Set();
 
@@ -47,19 +54,25 @@ async function downloadZip(items, zipname) {
     return candidate;
   }
 
+  let done = 0;
+  const total = items.length;
+  reportZipProgress(tabId, done, total);
+
   for (const item of items) {
     const name = uniqueName(basename(item.filename));
     if (item.text !== undefined) {
       zip.file(name, item.text);
-      continue;
+    } else {
+      try {
+        const res = await fetch(item.url);
+        const buf = await res.arrayBuffer();
+        zip.file(name, buf);
+      } catch (error) {
+        console.log("ZipFetchError: " + item.url, error);
+      }
     }
-    try {
-      const res = await fetch(item.url);
-      const buf = await res.arrayBuffer();
-      zip.file(name, buf);
-    } catch (error) {
-      console.log("ZipFetchError: " + item.url, error);
-    }
+    done++;
+    reportZipProgress(tabId, done, total);
   }
 
   const blob = await zip.generateAsync({ type: "blob" });
@@ -71,6 +84,11 @@ async function downloadZip(items, zipname) {
       saveAs: false,
     },
     function (downloadId) {
+      if (tabId != undefined) {
+        chrome.tabs.sendMessage(tabId, { type: "zipDone" }, function () {
+          void chrome.runtime.lastError;
+        });
+      }
       // Don't revoke until the download finishes/fails — revoking too early breaks it
       function onChanged(delta) {
         if (delta.id !== downloadId) return;

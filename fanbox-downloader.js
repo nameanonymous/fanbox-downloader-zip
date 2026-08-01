@@ -357,26 +357,53 @@ function createButton() {
   const button = document.createElement("button");
   button.id = BUTTON_ID;
   button.type = "button";
-  button.textContent = "Download";
   Object.assign(button.style, {
     position: "fixed",
     left: "50%",
     bottom: "24px",
     transform: "translateX(-50%)",
     zIndex: "2147483647",
-    padding: "12px 32px",
+    width: "200px",
+    height: "44px",
+    padding: "0",
     backgroundColor: "#1a73e8",
     color: "#ffffff",
     border: "none",
-    borderRadius: "24px",
-    fontSize: "15px",
+    borderRadius: "22px",
+    fontSize: "14px",
     fontWeight: "bold",
     fontFamily: "sans-serif",
     boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
     cursor: "pointer",
+    overflow: "hidden",
   });
+
+  const fill = document.createElement("div");
+  fill.className = "fbdl-fill";
+  Object.assign(fill.style, {
+    position: "absolute",
+    top: "0",
+    left: "0",
+    bottom: "0",
+    width: "0%",
+    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    transition: "width 0.2s ease-out",
+    pointerEvents: "none",
+  });
+
+  const label = document.createElement("span");
+  label.className = "fbdl-label";
+  label.textContent = "Download";
+  Object.assign(label.style, {
+    position: "relative",
+    zIndex: "1",
+  });
+
+  button.appendChild(fill);
+  button.appendChild(label);
+
   button.addEventListener("mouseenter", () => {
-    button.style.backgroundColor = "#1558b0";
+    if (!button.disabled) button.style.backgroundColor = "#1558b0";
   });
   button.addEventListener("mouseleave", () => {
     if (!button.disabled) button.style.backgroundColor = "#1a73e8";
@@ -387,22 +414,54 @@ function createButton() {
   return button;
 }
 
+// How long to wait for the background script's "zipDone" signal before giving up
+// and re-enabling the button anyway, in case a message gets lost.
+const ZIP_PROGRESS_TIMEOUT_MS = 5 * 60 * 1000;
+
 async function onDownloadClick() {
   const button = document.getElementById(BUTTON_ID);
+  const fill = button.querySelector(".fbdl-fill");
+  const label = button.querySelector(".fbdl-label");
+
+  function setProgress(percent) {
+    fill.style.width = percent + "%";
+  }
+
   button.disabled = true;
-  button.textContent = "Downloading...";
   button.style.backgroundColor = "#1558b0";
   button.style.cursor = "default";
+  setProgress(0);
+  label.textContent = "Downloading...";
+
+  let onProgressMessage;
+  const waitForCompletion = new Promise((resolve) => {
+    const timeoutId = setTimeout(resolve, ZIP_PROGRESS_TIMEOUT_MS);
+    onProgressMessage = function (request) {
+      if (request.type == "zipProgress") {
+        const percent = request.total ? Math.round((request.done / request.total) * 100) : 0;
+        setProgress(percent);
+        label.textContent = `Downloading... ${percent}%`;
+      } else if (request.type == "zipDone") {
+        clearTimeout(timeoutId);
+        resolve();
+      }
+    };
+    chrome.runtime.onMessage.addListener(onProgressMessage);
+  });
+
   try {
     await main(SETTINGS);
+    await waitForCompletion;
   } catch (error) {
     console.log("fanbox-downloader: download failed", error);
     alert("fanbox-downloader: couldn't find a post to download on this page.");
   } finally {
+    chrome.runtime.onMessage.removeListener(onProgressMessage);
+    setProgress(0);
     button.disabled = false;
-    button.textContent = "Download";
     button.style.backgroundColor = "#1a73e8";
     button.style.cursor = "pointer";
+    label.textContent = "Download";
   }
 }
 
