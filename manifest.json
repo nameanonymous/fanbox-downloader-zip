@@ -22,11 +22,10 @@
     "downloads",
     "*://*.fanbox.cc/*"
   ],
-  "web_accessible_resources": ["icon.svg"],
   "homepage_url": "https://github.com/tana3n/fanbox-downloader/",
   "browser_specific_settings": {
     "gecko": {
-      "id": "fanbox-downloader-zip@local.addon",
+      "id": "{a9413bbd-5b20-4c19-97e4-8eb949861725}",
       "data_collection_permissions": {
         "required": ["none"]
       }
