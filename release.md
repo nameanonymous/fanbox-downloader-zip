@@ -1,3 +1,9 @@
+## 1.5.0(2026/08/01, unofficial zip fork)
+
+- English UI, and the options page is gone: attachments, text, and ZIP bundling are now always on,
+  and rename macros always use the built-in defaults.
+- Right-click download is replaced by a blue "Download" button pinned to the bottom of FANBOX post pages.
+
 ## 1.4.0(2026/07/31, unofficial zip fork)
 
 - 「ZIPにまとめてダウンロード」オプションを追加

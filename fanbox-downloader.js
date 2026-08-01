@@ -1,4 +1,22 @@
-// fanbox-downloaer
+// fanbox-downloader
+
+// Default rename macros (fixed — no options page)
+const DEFAULT_MACRO =
+  "fanbox-downloader/$fanboxname$($fanboxID$)/[$YYYY28$$MM28$$DD28$_$hh28$$mm$]$fanboxname$($fanboxID$) - $Title$($PageID$)";
+const DEFAULT_MACRO2 =
+  "fanbox-downloader/$fanboxname$($fanboxID$)/[$YYYY28$$MM28$$DD28$_$hh28$$mm$]$fanboxname$($fanboxID$) - $Title$($PageID$) [$Diff$ - $DiffCount$]";
+const DEFAULT_MACRO3 =
+  "fanbox-downloader/$fanboxname$($fanboxID$)/[$YYYY28$$MM28$$DD28$_$hh28$$mm$]$fanboxname$($fanboxID$) - $Title$($PageID$) - $AttrName$";
+
+// Fixed download settings — all options are always on
+const SETTINGS = {
+  savetext: true,
+  saveattr: true,
+  zipdownload: true,
+  macro: DEFAULT_MACRO,
+  macro2: DEFAULT_MACRO2,
+  macro3: DEFAULT_MACRO3,
+};
 
 // Unique Functions
 // Get Page Information
@@ -9,10 +27,10 @@ function getfanboxName() {
 
 function getfanboxID() {
   if (location.hostname == "www.fanbox.cc") {
-    s = location.pathname.match(/(?<=@)(.*)(?=\/posts)/); //@以降を取得
+    s = location.pathname.match(/(?<=@)(.*)(?=\/posts)/); // everything after @
     return s[0];
   } else {
-    return location.hostname.replace(".fanbox.cc", ""); //こっちはサブドメインを取得すればOK
+    return location.hostname.replace(".fanbox.cc", ""); // otherwise the subdomain is the ID
   }
 }
 
@@ -164,11 +182,11 @@ function getDate(query, custom) {
     replaced = ["", 1970, 0, 1, 0, 0];
   }
   if (custom & (replaced[4] < 4)) {
-    //28h表記 4時前ならば1日前にずらして+24hする
+    // 28h notation: before 4am counts as the previous day, +24h
     replaced[3] = parseInt(replaced[3]) - 1;
     replaced[4] = parseInt(replaced[4]) + 24;
   }
-  dates = new Date(replaced[1], replaced[2], replaced[3]); //補正用
+  dates = new Date(replaced[1], replaced[2], replaced[3]); // for correction
   replaced = [
     replaced[0],
     dates.getFullYear().toString(),
@@ -207,7 +225,7 @@ function getDateSourceMethod2() {
 // Common Functions
 //
 function getFilename2(query) {
-  // Macro処理
+  // Macro substitution
   query = query.replaceAll("$fanboxname$", getfanboxName());
   query = query.replaceAll("$fanboxID$", getfanboxID());
   query = query.replaceAll("$Title$", getTitle());
@@ -229,7 +247,7 @@ function getFilename2(query) {
   query = query.replaceAll("$NDD28$", getDateNow(3, true));
   query = query.replaceAll("$Nhh28$", getDateNow(4, true));
   query = query.replaceAll("$Nmm$", getDateNow(5));
-  // ファイル名先頭処理
+  // Strip leading whitespace from the filename
   return query.replace(/(^\s+)/g, "");
 }
 
@@ -255,7 +273,7 @@ function getFilename(diff) {
   return query;
 }
 
-// URIから判定する場合
+// Determine the extension from the URI
 function getExttype(URL) {
   return URL.split("/").reverse()[0].split(".")[1];
 }
@@ -288,12 +306,10 @@ function getDateNow(query, custom) {
     dateNow.getMinutes().toString(),
   ];
   if (custom & (replaced[4] < 4)) {
-    //28h表記 4時前ならば1日前にずらして本来の時間+24hにする
-    // 年月日はDateの補正を利用する
-    // 日時は純粋に進めればOKなので出力値を上書き
-    customDate = new Date(replaced[1], replaced[2] - 1, replaced[3] - 1); //補正用
+    // 28h notation: before 4am, keep the date correction but push the clock +24h
+    customDate = new Date(replaced[1], replaced[2] - 1, replaced[3] - 1); // for correction
     replaced = [
-      dateNow, //歪んだ値はそのまま入らない（元のまま）
+      dateNow, // keep the raw value as-is
       customDate.getFullYear().toString(),
       (customDate.getMonth() + 1).toString(),
       customDate.getDate().toString(),
@@ -303,6 +319,7 @@ function getDateNow(query, custom) {
   }
   return replaced[query].padStart(2, "0");
 }
+
 async function main(str) {
   globalThis.macro = str.macro;
   globalThis.macro2 = str.macro2;
@@ -310,11 +327,11 @@ async function main(str) {
 
   if (str.zipdownload == true) {
     console.log("Enabled ZipDownload");
-    dlZip(str);
+    await dlZip(str);
     return;
   }
 
-  dlimg();
+  await dlimg();
 
   if (str.savetext == true) {
     console.log("Enabled SaveText");
@@ -322,20 +339,99 @@ async function main(str) {
   }
   if (str.saveattr == true) {
     console.log("Enabled SaveAttributes");
-    dlAttr();
+    await dlAttr();
   }
 }
 
-chrome.runtime.onMessage.addListener(function (request, sender) {
-  chrome.storage.local.get(
-    ["savetext", "saveattr", "macro", "macro2", "macro3", "zipdownload"],
-    function (str) {
-      if (str.macro == undefined) {
-        alert("fanbox-downloader：オプションから設定を行ってください");
-        return chrome.runtime.sendMessage({ type: "set" });
-      } else {
-        main(str);
-      }
-    }
-  );
-});
+// Floating "Download" button
+// Shown on fanbox.cc post pages instead of a right-click context menu.
+const BUTTON_ID = "fanbox-downloader-button";
+
+function isPostPage() {
+  return /\/posts\/[0-9]+/.test(location.pathname);
+}
+
+function createButton() {
+  if (document.getElementById(BUTTON_ID)) return document.getElementById(BUTTON_ID);
+
+  const button = document.createElement("button");
+  button.id = BUTTON_ID;
+  button.type = "button";
+  button.textContent = "Download";
+  Object.assign(button.style, {
+    position: "fixed",
+    left: "50%",
+    bottom: "24px",
+    transform: "translateX(-50%)",
+    zIndex: "2147483647",
+    padding: "12px 32px",
+    backgroundColor: "#1a73e8",
+    color: "#ffffff",
+    border: "none",
+    borderRadius: "24px",
+    fontSize: "15px",
+    fontWeight: "bold",
+    fontFamily: "sans-serif",
+    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+    cursor: "pointer",
+  });
+  button.addEventListener("mouseenter", () => {
+    button.style.backgroundColor = "#1558b0";
+  });
+  button.addEventListener("mouseleave", () => {
+    if (!button.disabled) button.style.backgroundColor = "#1a73e8";
+  });
+  button.addEventListener("click", onDownloadClick);
+
+  document.body.appendChild(button);
+  return button;
+}
+
+async function onDownloadClick() {
+  const button = document.getElementById(BUTTON_ID);
+  button.disabled = true;
+  button.textContent = "Downloading...";
+  button.style.backgroundColor = "#1558b0";
+  button.style.cursor = "default";
+  try {
+    await main(SETTINGS);
+  } catch (error) {
+    console.log("fanbox-downloader: download failed", error);
+    alert("fanbox-downloader: couldn't find a post to download on this page.");
+  } finally {
+    button.disabled = false;
+    button.textContent = "Download";
+    button.style.backgroundColor = "#1a73e8";
+    button.style.cursor = "pointer";
+  }
+}
+
+function updateButtonVisibility() {
+  const button = createButton();
+  button.style.display = isPostPage() ? "block" : "none";
+}
+
+// fanbox.cc is a single-page app, so the URL can change without a page reload
+(function watchLocationChanges() {
+  const originalPushState = history.pushState;
+  const originalReplaceState = history.replaceState;
+
+  history.pushState = function (...args) {
+    originalPushState.apply(this, args);
+    window.dispatchEvent(new Event("fanbox-downloader:locationchange"));
+  };
+  history.replaceState = function (...args) {
+    originalReplaceState.apply(this, args);
+    window.dispatchEvent(new Event("fanbox-downloader:locationchange"));
+  };
+  window.addEventListener("popstate", () => {
+    window.dispatchEvent(new Event("fanbox-downloader:locationchange"));
+  });
+  window.addEventListener("fanbox-downloader:locationchange", updateButtonVisibility);
+})();
+
+if (document.readyState == "loading") {
+  document.addEventListener("DOMContentLoaded", updateButtonVisibility);
+} else {
+  updateButtonVisibility();
+}

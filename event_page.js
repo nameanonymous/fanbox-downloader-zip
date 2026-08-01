@@ -1,27 +1,4 @@
-//コンテキスト表示
-chrome.contextMenus.create({
-  id: "fbdl",
-  title: "このページを保存",
-  type: "normal",
-  contexts: ["page"],
-  documentUrlPatterns: [
-    "https://*.fanbox.cc/posts/*",
-    "https://*.fanbox.cc/*/posts/*",
-  ],
-  /*,
-    'onclick' : function(info){
-      chrome.extention.sendMessage({type: 'get'});
-    }*/
-});
-
-//選択時のイベント
-chrome.contextMenus.onClicked.addListener(function (info, tab) {
-  chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    chrome.tabs.sendMessage(tabs[0].id, { message: "getImage" });
-  });
-});
-
-//直リンに出来ない物は一度storageに投げた方がよさそう
+// Some files can't be linked directly, so route them through the extension first
 chrome.runtime.onMessage.addListener(function (request) {
   if (request.type == "download") {
     console.log(request.filename);
@@ -30,8 +7,6 @@ chrome.runtime.onMessage.addListener(function (request) {
     console.log(request.filename);
     const blob = URL.createObjectURL(request.blob);
     download(blob, request.filename);
-  } else if (request.type == "set") {
-    chrome.runtime.openOptionsPage(); //background.jsから発火する必要がある
   } else if (request.type == "zip") {
     downloadZip(request.items, request.zipname);
   }
@@ -96,7 +71,7 @@ async function downloadZip(items, zipname) {
       saveAs: false,
     },
     function (downloadId) {
-      // ダウンロードが完了/失敗するまでは revoke しない（早すぎると DL が壊れる）
+      // Don't revoke until the download finishes/fails — revoking too early breaks it
       function onChanged(delta) {
         if (delta.id !== downloadId) return;
         if (delta.state && (delta.state.current == "complete" || delta.state.current == "interrupted")) {
